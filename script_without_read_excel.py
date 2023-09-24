@@ -53,7 +53,7 @@ for num, name in enumerate(unique_names):
     new_df["Number of Academic Sanctions"][num] = np.sum(_type == "Academic Sanction")
     new_df["Total Value"][num] = np.sum(df["Points value of sanction"][bool].astype(np.float32))
 
-new_df.to_excel(opts.output_excel, index=False)
+#new_df.to_excel(opts.output_excel, index=False)
 new_df.to_html(buf=opts.output_html, index=False)
 """
 for year in np.unique(df["Year"]):
