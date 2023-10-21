@@ -57,6 +57,13 @@ for idx, (col, value) in enumerate(new_df.items()):
 wb.save(opts.output_excel)
 new_df.to_html(buf=opts.output_html, index=False)
 
+for year in np.unique(df["Year"]):
+    bool = year == df["Year"]
+    average = np.mean(
+        [np.sum(df["Points value of sanction"][bool][df["Pupil Name"] == student].astype(np.float32)) for student in unique_names]
+    )
+    print(f"Average number of points per student in {year}: {average}")
+
 # Now we can do some statistics
 dates = np.array([datetime.strptime(_, "%d/%m/%Y") for _ in df["Date of sanction"]])
 first = np.min(dates)
@@ -79,40 +86,36 @@ while True:
         first += timedelta(days=7 - first.weekday())
         num += 1
 
-fig, axs = plt.subplots(figsize=(20, 12), nrows=3, sharex=True)
-nweeks = len(weeks.keys())
-width = 0.95 / nweeks
-for num in range(len(unique_names)):
-    multiplier = 1
-    for idx in weeks.keys():
-        if num == 0:
-            label = f"Week {idx}"
-        else:
-            label = None
-        offset = width * multiplier
-        rects = axs[0].bar(num - (width * nweeks / 2) + offset, weeks[idx][unique_names[num]]["Total Value"], width, label=label, color=f"C0{idx}")
-        rects = axs[1].bar(num - (width * nweeks / 2) + offset, weeks[idx][unique_names[num]]["Number of Rewards"], width, label=label, color=f"C0{idx}")
-        rects = axs[2].bar(num - (width * nweeks / 2) + offset, weeks[idx][unique_names[num]]["Number of Sanctions"], width, label=label, color=f"C0{idx}")
-        multiplier += 1
-    axs[0].axvline(num - width * nweeks / 2, color='lightgrey', linestyle=":")
-    axs[1].axvline(num - width * nweeks / 2, color='lightgrey', linestyle=":")
-    axs[2].axvline(num - width * nweeks / 2, color='lightgrey', linestyle=":")
-axs[0].set_xticklabels("")
-axs[1].set_xticklabels("")
-axs[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.1), ncol=nweeks)
-axs[1].set_xticks(np.arange(len(unique_names)))
-axs[2].set_xticklabels(unique_names, rotation=45)
-axs[0].set_ylabel("Weekly total")
-axs[1].set_ylabel("Total rewards")
-axs[2].set_ylabel("Total sanctions")
-plt.tight_layout()
-plt.savefig("week_by_week.png")
-plt.close()
+plots = ["Total Value", "Number of Rewards", "Number of Sanctions"]
+for _type in plots:
+    fig = plt.figure(figsize=(5, 18))
+    ax = plt.gca()
+    nweeks = len(weeks.keys())
+    width = 0.95 / nweeks
+    for num in range(len(unique_names)):
+        multiplier = 1
+        for idx in weeks.keys():
+            if num == 0:
+                label = f"Week {idx}"
+            else:
+                label = None
+            offset = width * multiplier
+            rects = plt.barh(num - (width * nweeks / 2) + offset, weeks[idx][unique_names[num]][_type], width, label=label, color=f"C0{idx}")
+            multiplier += 1
+        plt.axhline(num - width * nweeks / 2, color='lightgrey', linestyle=":")
+    plt.legend(loc="upper center", bbox_to_anchor=(0.5, 1.07), ncol=3)
+    ax.set_yticks(np.arange(len(unique_names)))
+    ax.set_yticklabels(unique_names)
+    ax.set_xlabel(_type)
+    plt.tight_layout()
+    plt.savefig(f"{_type.replace(' ', '_')}.png")
+    plt.close()
 
 raw = open("output.html", "r")
 lines = raw.readlines()
 with open("output.html", "w") as f:
     lines += ["<p></p>\n"]
     lines += ["<p></p>\n"]
-    lines += ["<img src='week_by_week.png' style='width:85%'></img>\n"]
+    for _type in plots:
+        lines += [f"<img src='{_type.replace(' ', '_')}.png' style='width:20%'></img>\n"]
     f.writelines(lines)
