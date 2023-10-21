@@ -26,6 +26,7 @@ data_dict = {col: data[:,num][1:] for num, col in enumerate(data[0])}
 df = pd.DataFrame.from_dict(data_dict)
 # continue with rest of script
 unique_names = np.unique(df["Pupil Name"])
+unique_years = np.unique(df["Year"])
 initial_entry = np.zeros_like(unique_names)
 new_df = pd.DataFrame.from_dict(
     {
@@ -57,12 +58,14 @@ for idx, (col, value) in enumerate(new_df.items()):
 wb.save(opts.output_excel)
 new_df.to_html(buf=opts.output_html, index=False)
 
-for year in np.unique(df["Year"]):
+for year in unique_years:
     bool = year == df["Year"]
-    average = np.mean(
+    average_value = np.mean(
         [np.sum(df["Points value of sanction"][bool][df["Pupil Name"] == student].astype(np.float32)) for student in unique_names]
     )
-    print(f"Average number of points per student in {year}: {average}")
+    print(f"Average number of points per student in {year}: {average_value}")
+
+#I'm getting a bit obsessed with data...  As well as splitting the graphs into three, would it also be possible to graph the total rewards and sanctions (separately numbers and points value) of the whole House and each year group as a function of time?
 
 # Now we can do some statistics
 dates = np.array([datetime.strptime(_, "%d/%m/%Y") for _ in df["Date of sanction"]])
@@ -74,17 +77,19 @@ while True:
     bool = (dates >= first) & (dates < end)
     mask = lambda s: df["Pupil Name"] == s
     weeks[num] = {}
-    for student in unique_names:
-        value = df["Points value of sanction"][bool][mask(student)].astype(np.float32)
-        sanction_mask = np.array(["Sanction" in _ for _ in df["Type of Sanction"][bool][mask(student)]])
-        reward_mask = np.array(["Reward" in _ for _ in df["Type of Sanction"][bool][mask(student)]])
-        weeks[num][student] = {
-            "Number of Sanctions (Number)": np.sum(sanction_mask),
-            "Number of Sanctions (Value)": np.abs(np.sum(value[sanction_mask])),
-            "Number of Rewards (Number)": np.sum(reward_mask),
-            "Number of Rewards (Value)": np.sum(value[reward_mask]),
-            "Total Value": np.sum(value)
-        }
+    for list, df_name in zip([unique_names, unique_years], ["Pupil Name", "Year"]):
+        mask = lambda s: df[df_name] == s
+        for v in list:
+            value = df["Points value of sanction"][bool][mask(v)].astype(np.float32)
+            sanction_mask = np.array(["Sanction" in _ for _ in df["Type of Sanction"][bool][mask(v)]])
+            reward_mask = np.array(["Reward" in _ for _ in df["Type of Sanction"][bool][mask(v)]])
+            weeks[num][v] = {
+                "Number of Sanctions (Number)": np.sum(sanction_mask),
+                "Number of Sanctions (Value)": np.sum(value[sanction_mask]),
+                "Number of Rewards (Number)": np.sum(reward_mask),
+                "Number of Rewards (Value)": np.sum(value[reward_mask]),
+                "Total Value": np.sum(value)
+            }
     if first > np.max(dates):
         break
     else:
@@ -92,14 +97,14 @@ while True:
         num += 1
 
 plots = ["Total Value", "Number of Rewards", "Number of Sanctions"]
+nweeks = len(weeks.keys())
+width = 0.95 / nweeks
 for _type in plots:
     if _type == "Total Value":
         fig = plt.figure(figsize=(5, 15))
         axs = [plt.gca()]
     else:
         fig, axs = plt.subplots(figsize=(10, 15), ncols=2, sharey=True)
-    nweeks = len(weeks.keys())
-    width = 0.95 / nweeks
     for num in range(len(unique_names)):
         multiplier = 1
         for idx in weeks.keys():
@@ -133,7 +138,38 @@ for _type in plots:
         axs[0].get_legend().remove()
         axs[0].set_xlabel("Number")
         axs[1].set_xlabel("Value")
+        xticks = axs[0].get_xticks()
+        axs[0].set_xticks(np.arange(xticks[0], xticks[-1], 2).astype(int))
     plt.savefig(f"{_type.replace(' ', '_')}.png")
+    plt.close()
+
+fig, axs = plt.subplots(figsize=(10, 15), ncols=2, sharey=True)
+for _type in plots[1:]:
+    fig, axs = plt.subplots(figsize=(10, 15), ncols=2, sharey=True)
+    for num in range(len(unique_years)):
+        multiplier = 1
+        for idx in weeks.keys():
+            if num == 0:
+                label = f"Week {idx}"
+            else:
+                label = None
+            offset = width * multiplier
+            rects = axs[0].barh(num - (width * nweeks / 2) + offset, weeks[idx][unique_years[num]][f"{_type} (Number)"], width, label=label, color=f"C0{idx}")
+            rects = axs[1].barh(num - (width * nweeks / 2) + offset, weeks[idx][unique_years[num]][f"{_type} (Value)"], width, label=label, color=f"C0{idx}")
+            multiplier += 1
+        axs[0].axhline(num - width * nweeks / 2, color='lightgrey', linestyle=":")
+        axs[1].axhline(num - width * nweeks / 2, color='lightgrey', linestyle=":")
+    axs[0].set_yticks(np.arange(len(unique_years)))
+    axs[0].set_yticklabels(unique_years)
+    axs[0].legend(loc="upper center", bbox_to_anchor=(0.8, 1.07), ncol=len(weeks) // 2)
+    handles, labels = axs[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='upper center', ncol=len(weeks) // 2, bbox_to_anchor=(0.5, 0.95))
+    axs[0].get_legend().remove()
+    axs[0].set_xlabel("Number")
+    axs[1].set_xlabel("Value")
+    xticks = axs[0].get_xticks()
+    axs[0].set_xticks(np.arange(xticks[0], xticks[-1], 5).astype(int))
+    plt.savefig(f"{_type.replace(' ', '_')}_year.png")
     plt.close()
 
 raw = open("output.html", "r")
