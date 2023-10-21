@@ -73,13 +73,18 @@ while True:
     end = first + timedelta(days=7 - first.weekday())
     bool = (dates >= first) & (dates < end)
     mask = lambda s: df["Pupil Name"] == s
-    weeks[num] = {
-        student: {
-            "Number of Sanctions": np.sum(["Sanction" in _ for _ in df["Type of Sanction"][bool][mask(student)]]),
-            "Number of Rewards": np.sum(["Reward" in _ for _ in df["Type of Sanction"][bool][mask(student)]]),
-            "Total Value": np.sum(df["Points value of sanction"][bool][mask(student)].astype(np.float32))
-        } for student in unique_names
-    }
+    weeks[num] = {}
+    for student in unique_names:
+        value = df["Points value of sanction"][bool][mask(student)].astype(np.float32)
+        sanction_mask = np.array(["Sanction" in _ for _ in df["Type of Sanction"][bool][mask(student)]])
+        reward_mask = np.array(["Reward" in _ for _ in df["Type of Sanction"][bool][mask(student)]])
+        weeks[num][student] = {
+            "Number of Sanctions (Number)": np.sum(sanction_mask),
+            "Number of Sanctions (Value)": np.abs(np.sum(value[sanction_mask])),
+            "Number of Rewards (Number)": np.sum(reward_mask),
+            "Number of Rewards (Value)": np.sum(value),
+            "Total Value": np.sum(value)
+        }
     if first > np.max(dates):
         break
     else:
@@ -88,8 +93,11 @@ while True:
 
 plots = ["Total Value", "Number of Rewards", "Number of Sanctions"]
 for _type in plots:
-    fig = plt.figure(figsize=(5, 18))
-    ax = plt.gca()
+    if _type == "Total Value":
+        fig = plt.figure(figsize=(5, 15))
+        axs = [plt.gca()]
+    else:
+        fig, axs = plt.subplots(figsize=(10, 15), ncols=2, sharey=True)
     nweeks = len(weeks.keys())
     width = 0.95 / nweeks
     for num in range(len(unique_names)):
@@ -100,14 +108,31 @@ for _type in plots:
             else:
                 label = None
             offset = width * multiplier
-            rects = plt.barh(num - (width * nweeks / 2) + offset, weeks[idx][unique_names[num]][_type], width, label=label, color=f"C0{idx}")
+            if _type == "Total Value":
+                rects = axs[0].barh(num - (width * nweeks / 2) + offset, weeks[idx][unique_names[num]][f"{_type}"], width, label=label, color=f"C0{idx}")
+                multiplier += 1
+                continue
+            rects = axs[0].barh(num - (width * nweeks / 2) + offset, weeks[idx][unique_names[num]][f"{_type} (Number)"], width, label=label, color=f"C0{idx}")
+            rects = axs[1].barh(num - (width * nweeks / 2) + offset, weeks[idx][unique_names[num]][f"{_type} (Value)"], width, label=label, color=f"C0{idx}")
             multiplier += 1
-        plt.axhline(num - width * nweeks / 2, color='lightgrey', linestyle=":")
-    plt.legend(loc="upper center", bbox_to_anchor=(0.5, 1.07), ncol=3)
-    ax.set_yticks(np.arange(len(unique_names)))
-    ax.set_yticklabels(unique_names)
-    ax.set_xlabel(_type)
-    plt.tight_layout()
+        axs[0].axhline(num - width * nweeks / 2, color='lightgrey', linestyle=":")
+        if _type != "Total Value":
+            axs[1].axhline(num - width * nweeks / 2, color='lightgrey', linestyle=":")
+
+    axs[0].set_yticks(np.arange(len(unique_names)))
+    axs[0].set_yticklabels(unique_names)
+    if _type == "Total Value":
+        axs[0].set_xlabel("Total Value")
+        axs[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.08), ncol=len(weeks) // 3)
+        plt.tight_layout()
+    else:
+        plt.suptitle(_type)
+        axs[0].legend(loc="upper center", bbox_to_anchor=(0.8, 1.07), ncol=len(weeks) // 2)
+        handles, labels = axs[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper center', ncol=len(weeks) // 2, bbox_to_anchor=(0.5, 0.95))
+        axs[0].get_legend().remove()
+        axs[0].set_xlabel("Number")
+        axs[1].set_xlabel("Value")
     plt.savefig(f"{_type.replace(' ', '_')}.png")
     plt.close()
 
@@ -117,5 +142,8 @@ with open("output.html", "w") as f:
     lines += ["<p></p>\n"]
     lines += ["<p></p>\n"]
     for _type in plots:
-        lines += [f"<img src='{_type.replace(' ', '_')}.png' style='width:20%'></img>\n"]
+        if _type == "Total Value":
+            lines += [f"<img src='{_type.replace(' ', '_')}.png' style='width:19%'></img>\n"]
+        else:
+            lines += [f"<img src='{_type.replace(' ', '_')}.png' style='width:38%'></img>\n"]
     f.writelines(lines)
