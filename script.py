@@ -82,7 +82,7 @@ while True:
             "Number of Sanctions (Number)": np.sum(sanction_mask),
             "Number of Sanctions (Value)": np.abs(np.sum(value[sanction_mask])),
             "Number of Rewards (Number)": np.sum(reward_mask),
-            "Number of Rewards (Value)": np.sum(value),
+            "Number of Rewards (Value)": np.sum(value[reward_mask]),
             "Total Value": np.sum(value)
         }
     if first > np.max(dates):
